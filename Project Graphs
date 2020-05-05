@@ -1,0 +1,77 @@
+#table test
+#average read quality scores should be >7 (Phred 33)
+#can graph quality scores in the same way
+
+library(ShortRead)
+library(ggplot2)
+library(dplyr)
+
+source('https://raw.githubusercontent.com/developing-bioinformatics/eDNA_BLAST/master/R/core.R')
+download_sra(sample = 'Swamp_S1_', dir.out = 'data')
+
+#read lengths
+
+files = list.files('data', pattern='.fastq', full.names=TRUE)
+print(files)
+
+get_readlengths <- function(filename){
+  dna = readFastq(filename)
+  reads = sread(dna)
+  readlengths = reads@ranges@width
+  ret = cbind(rep(filename, length(readlengths)), readlengths)
+  ret=as.data.frame(ret)
+  colnames(ret) = c('file', 'readlength')
+  ret$readlength = as.numeric(ret$readlength)
+  return(ret)
+}
+
+get_readlengths(files)
+
+results = lapply(files, get_readlengths)
+restable = bind_rows(results)
+
+ggplot(restable) + geom_histogram(aes(x=readlength)) + facet_grid(~file)
+
+ggplot(restable) + geom_density(aes(x=readlength, color=file))
+
+
+#quality scores
+
+files = list.files('data', pattern='.fastq', full.names=TRUE)
+print(files)
+
+get_qualityscores <- function(filename){
+  dna = readFastq(filename)
+  qscores = quality(dna)
+  numqscores = as(qscores, "matrix") # converts to numeric scores automatically
+  avgscores = apply(numqscores, 1, mean, na.rm=TRUE)
+  avgscores = as.data.frame(avgscores)
+  ret = cbind(rep(filename, nrow(avgscores)), avgscores)
+  ret=as.data.frame(ret)
+  colnames(ret) = c('file', 'qualityscore')
+  #ret$avgscores = as.numeric(ret$avgscores)
+  return(ret)
+}
+
+get_qualityscores(files)
+
+results = lapply(files, get_qualityscores)
+restable = bind_rows(results)
+
+ggplot(restable) + geom_histogram(aes(x=qualityscore)) + facet_grid(~file)
+
+ggplot(restable) + geom_density(aes(x=qualityscore, color=file))
+
+#can predict that second from left (high qulity and longer) that sample gives us the most results 
+#and most confidence in our results (reads should be good matches)
+
+#filtering for read length would potentially change results a lot
+#plotting out the read lengths can predict which of these samples accurately gives us results
+#follow up: BLAST all of these and figure out which is true - do we get more IDs with longer reads or not?
+#what happens if we impose a filter? 
+#in results: might identify some of the files we looked at that have a problem vs the ones that look like they're ok
+#can I BLAST ITS2 and one other and see if we get more results? that would mean we know to look for graphs like 
+#ITS2 ahead of time for more results
+
+#with out the ggplot facet function makes just one histogram. the facet tells ggplot to create one subplot for every element in that facet (We are faceting on the file variable)
+#basically does a groupby function
